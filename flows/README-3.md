@@ -1,17 +1,33 @@
-<!-- TOTP Security Flowchart -->README.md
-# TOTP Security Technical Specification
+```mermaid
+flowchart TD
+    S([保護PDFを開く]) --> O1[PDFから/Custom_OTP_Dataを取得]
+    O1 --> O2{保護メタデータが存在する?}
 
-## システム全体フロー
+    O2 -->|いいえ| NOTPROTECTED[未保護PDFとして処理<br/>またはポリシーに従い拒否]
+    O2 -->|はい| O3[メタデータを厳格に解析]
 
-![システム全体フロー](docs/README-1.svg)
+    O3 --> O4{スキーマ・フィールド長・<br/>暗号方式・policyは妥当?}
+    O4 -->|いいえ| FAIL
+    O4 -->|はい| O5[document_idとkey_idを取得]
 
-## PDF暗号化・バッチ作成フロー
+    O5 --> C1[共有Credentialを検索<br/>shared/key_id]
+    C1 --> C2{共有Credentialが存在する?}
 
-![暗号化・バッチ作成フロー](docs/README-2.svg)
+    C2 -->|いいえ| C3[旧形式の文書単位Credentialを検索]
+    C2 -->|はい| C4[Credentialを読み込む]
+    C3 --> C5{Credentialが存在する?}
+    C5 -->|いいえ| FAIL
+    C5 -->|はい| C4
 
-## 保護PDF閲覧・復号フロー
+    C4 --> C6[DPAPIでVaultを復号]
+    C6 --> C7{Vaultの認証・解析に成功?}
+    C7 -->|いいえ| FAIL
+    C7 -->|はい| MODE{passphrase_mode}
 
-![保護PDF閲覧・復号フロー](docs/README-3.svg)
+    MODE -->|user| RAM{有効な秘密鍵が<br/>RAMキャッシュにある?}
+    RAM -->|はい| KEYREADY[RAM上のX25519秘密鍵を使用]
+    RAM -->|いいえ| PASS[パスフレーズを入力]
+    PASS --> KDF[PBKDF2-HMAC-SHA256で<br/>K_pinを導出]
     KDF --> UNWRAP[Vault内の秘密鍵を<br/>AES-256-GCMで復号]
     UNWRAP --> UPASS{復号・タグ検証に成功?}
     UPASS -->|いいえ| RETRY{再試行可能?}
@@ -79,22 +95,4 @@
     WIPEFAIL --> END([オープン失敗])
 
         ##  判定ロジックの要約
-```mermaid
-flowchart TD
-    A[PDFを開く] --> B{Enrollment済み?}
-    B -->|いいえ| NG[閲覧拒否]
-    B -->|はい| C{秘密鍵を解除できる?}
-    C -->|いいえ| NG
-    C -->|はい| D{信頼できる現在時刻を<br/>確立できる?}
-    D -->|いいえ| NG
-    D -->|はい| E{有効期間内?}
-    E -->|いいえ| NG
-    E -->|はい| F{鍵バンドルの認証に成功?}
-    F -->|いいえ| NG
-    F -->|はい| G{OTPが必要?}
-    G -->|はい| H{OTPは有効?}
-    H -->|いいえ| NG
-    H -->|はい| I{PDFペイロードの<br/>認証・復号に成功?}
-    G -->|いいえ| I
-    I -->|いいえ| NG
-    I -->|はい| OK[メモリ上でPDFを表示]
+```

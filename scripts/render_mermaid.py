@@ -25,6 +25,20 @@ def extract_mermaid_blocks(text):
     return [m.group(1).strip() for m in MERMAID_BLOCK_RE.finditer(text)]
 
 
+def write_flow_files(base: Path, src: str, blocks: list):
+    """Write each mermaid block to flows/<src-stem>-<i>.md and return paths."""
+    flows = []
+    flows_dir = base / "flows"
+    flows_dir.mkdir(exist_ok=True)
+    stem = Path(src).stem
+    for i, block in enumerate(blocks, start=1):
+        name = f"{stem}-{i}.md" if len(blocks) > 1 else f"{stem}.md"
+        path = flows_dir / name
+        path.write_text("```mermaid\n" + block + "\n```\n", encoding="utf-8")
+        flows.append(path.relative_to(base))
+    return flows
+
+
 def render_svg(mermaid_text):
     resp = requests.post(KROKI_URL, data=mermaid_text.encode("utf-8"), headers={"Content-Type": "text/plain"})
     resp.raise_for_status()
@@ -67,7 +81,7 @@ def main():
 
     rendered = []
     for file in args.files:
-        path = (base / file).resolve()
+        path = (base / file)
         if not path.exists():
             print(f"Skipping {file}: not found")
             continue
@@ -76,8 +90,12 @@ def main():
         if not blocks:
             print(f"No mermaid blocks found in {file}")
             continue
+
+        # Write individual flow markdown files so each block can be referenced/checked in separately
+        flow_files = write_flow_files(base, file, blocks)
+
         for i, block in enumerate(blocks, start=1):
-            name = path.stem
+            name = Path(file).stem
             out_name = f"{name}-{i}.svg" if len(blocks) > 1 else f"{name}.svg"
             out_path = docs / out_name
             print(f"Rendering {file} block {i} -> {out_path}")
@@ -87,15 +105,31 @@ def main():
                 print(f"Failed to render {file} block {i}: {e}")
                 continue
             out_path.write_bytes(svg)
-            rendered.append((file, out_path.relative_to(base)))
+            rendered.append((file, out_path.relative_to(base), i))
 
-    # If we rendered the main totp diagram, ensure README links to it
+    # Insert image links into README for every rendered diagram
     readme_path = base / "README.md"
-    for src, rel in rendered:
-        if src.lower().endswith("totp-security-flowchart.md"):
-            inserted = insert_image_to_readme(readme_path, str(rel).replace('\\\\', '/'))
-            if inserted:
-                print(f"Inserted image link into README.md: {rel}")
+    for src, rel, idx in rendered:
+        # alt text: <source-stem> (block N)
+        stem = Path(src).stem
+        alt = f"{stem} (block {idx})"
+        image_rel = str(rel).replace('\\\\', '/')
+        img_line = f"![{alt}]({image_rel})\n\n"
+        text = readme_path.read_text(encoding="utf-8")
+        if img_line.strip() in text:
+            continue
+        # append images at top after initial comment if present
+        if text.startswith("<!--"):
+            end = text.find("-->")
+            if end != -1:
+                end += 3
+                new = text[:end] + "\n\n" + img_line + text[end:]
+            else:
+                new = img_line + text
+        else:
+            new = img_line + text
+        readme_path.write_text(new, encoding="utf-8")
+        print(f"Inserted image link into README.md: {image_rel}")
 
     if not rendered:
         print("No diagrams rendered.")
