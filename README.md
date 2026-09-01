@@ -46,6 +46,7 @@ flowchart LR
 ## PDF暗号化・バッチ作成フロー
 
 ```mermaid
+
 flowchart TD
     S([暗号化開始]) --> M{処理モード}
 
