@@ -64,7 +64,7 @@ flowchart TD
     G -->|いいえ| I
     I -->|いいえ| NG
     I -->|はい| OK["メモリ上でPDFを表示"]
-```Ctrl + S
+
 flowchart TD
     S([暗号化開始]) --> M{処理モード}
 
@@ -122,4 +122,4 @@ flowchart TD
     SAVE1 --> CLEAN
 
     CLEAN[K_enc・K_totp・K_wrap・秘密鍵・<br/>平文PDFバッファをゼロ化] --> OK([暗号化完了])
-    
+
